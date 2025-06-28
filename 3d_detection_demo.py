@@ -14,7 +14,7 @@ import socket
 import struct
 from collections import Counter
 
-# Class definitions
+# 类别定义
 CLASSES = [
     'CA001', 'CA002', 'CA003', 'CA004', 'CB001', 'CB002', 'CB003', 'CB004',
     'CC001', 'CC002', 'CC003', 'CC004', 'CD001', 'CD002', 'CD003', 'CD004',
@@ -23,11 +23,11 @@ CLASSES = [
 colors = np.random.uniform(0, 255, size=(len(CLASSES), 3))
 
 all_frame_counts = {cls: [] for cls in CLASSES}
-# Global variables
+# 全局变量
 model = None
 pipeline = None
 running = False
-detecting = False  # Controls whether detection is performed
+detecting = False  # 控制是否进行识别
 root = None
 canvas = None
 photo = None
@@ -39,26 +39,26 @@ global_item_counts = {cls: 0 for cls in CLASSES}
 start_time = 0
 DETECTION_TIME_LIMIT = 15
 ROUND = 1
-TEAM_ID = "flycar"
+TEAM_ID = f"flycar"
 MAX_FRAMES_MEMORY = 10
 tcp_socket = None
 
-# TCP configuration
+# TCP 配置
 TCP_HOST = '192.168.137.100'
 TCP_PORT = 6666
 
-# Desktop path
+# 桌面路径
 DESKTOP_PATH = os.path.expanduser(f"/home/{getpass.getuser()}/Desktop")
 RESULT_DIR = os.path.join(DESKTOP_PATH, "result_r")
 RESULT_FILE = os.path.join(RESULT_DIR, f"{TEAM_ID}-R{ROUND}.txt")
 
-# Initialize CSV file
+# 初始化CSV文件
 def init_csv():
     with open('item_counts.csv', 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['Timestamp', 'Class', 'Count'])
 
-# Save counts to CSV
+# 保存统计数据到CSV
 def save_to_csv(new_counts):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     with open('item_counts.csv', 'a', newline='') as f:
@@ -67,7 +67,7 @@ def save_to_csv(new_counts):
             if count > 0:
                 writer.writerow([timestamp, cls, count])
 
-# Save detection results to competition format file
+# 保存识别结果到比赛格式文件
 def save_results():
     global all_frame_counts
     if not os.path.exists(RESULT_DIR):
@@ -86,14 +86,14 @@ def save_results():
             f.write(f"Goal_ID={cls};Num={count}\n")
         f.write("END\n")
 
-    status_label.config(text=f"Detection completed, results saved to {RESULT_FILE}")
+    status_label.config(text=f"检测已结束，结果已保存到 {RESULT_FILE}")
     send_result_file()
 
-# Send TCP data
+# 发送TCP数据
 def send_tcp_data(data_type, data):
     global tcp_socket
     if tcp_socket is None:
-        status_label.config(text="TCP connection not established")
+        status_label.config(text="TCP连接未建立")
         return False
     try:
         data_bytes = data.encode('utf-8') if isinstance(data, str) else data
@@ -102,54 +102,54 @@ def send_tcp_data(data_type, data):
         tcp_socket.sendall(packet)
         return True
     except Exception as e:
-        status_label.config(text=f"TCP send failed: {e}")
+        status_label.config(text=f"TCP发送失败: {e}")
         return False
 
-# Send team ID
+# 发送队伍ID
 def send_team_id():
     return send_tcp_data(0, TEAM_ID)
 
-# Send result file
+# 发送结果文件
 def send_result_file():
     global tcp_socket
     try:
         with open(RESULT_FILE, 'r') as f:
             result_content = f.read()
         if send_tcp_data(1, result_content):
-            status_label.config(text="Result file sent")
+            status_label.config(text="结果文件已发送")
         else:
-            status_label.config(text="Failed to send result file")
+            status_label.config(text="发送结果文件失败")
         if tcp_socket:
             tcp_socket.close()
             tcp_socket = None
     except Exception as e:
-        status_label.config(text=f"Failed to send result file: {e}")
+        status_label.config(text=f"发送结果文件失败: {e}")
 
-# Connect to referee server
+# 连接到裁判盒
 def connect_to_server():
-    global tcp_socket, detecting, start_time
+    global tcp_socket, detecting , start_time
     try:
         if tcp_socket is not None:
             tcp_socket.close()
         tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         tcp_socket.connect((TCP_HOST, TCP_PORT))
-        status_label.config(text="Connected to referee server")
+        status_label.config(text="已连接到裁判盒")
         if send_team_id():
             detecting = True
             start_time = time()
-            status_label.config(text="Starting detection...")
+            status_label.config(text="开始检测...")
         else:
-            status_label.config(text="Failed to send team ID")
+            status_label.config(text="发送队伍ID失败")
             if tcp_socket:
                 tcp_socket.close()
                 tcp_socket = None
     except Exception as e:
-        status_label.config(text=f"Failed to connect to referee server: {e}")
+        status_label.config(text=f"连接裁判盒失败: {e}")
         if tcp_socket:
             tcp_socket.close()
             tcp_socket = None
 
-# Calculate IoU
+# 计算IoU
 def compute_iou(box1, box2):
     x1_1, y1_1, w1, h1 = box1
     x1_2, y1_2, w2, h2 = box2
@@ -165,14 +165,14 @@ def compute_iou(box1, box2):
     union_area = box1_area + box2_area - inter_area
     return inter_area / union_area if union_area > 0 else 0
 
-# Initialize model and camera
+# 初始化模型和摄像头
 def initialize():
     global model, pipeline
     try:
         model = InferSession(device_id=0, model_path="/home/HwHiAiUser/3d_detection/yolov8x_24_0307_5381_1280_huawei.om")
-        status_label.config(text="Model loaded successfully")
+        status_label.config(text="模型加载成功")
     except Exception as e:
-        status_label.config(text=f"Model loading failed: {e}")
+        status_label.config(text=f"模型加载失败: {e}")
         return False
 
     config = Config()
@@ -185,13 +185,13 @@ def initialize():
         depth_profile = depth_profile_list.get_default_video_stream_profile()
         config.enable_stream(depth_profile)
         pipeline.start(config)
-        status_label.config(text="Camera initialized successfully")
+        status_label.config(text="摄像头初始化成功")
         return True
     except Exception as e:
-        status_label.config(text=f"Camera configuration failed: {e}")
+        status_label.config(text=f"摄像头配置失败: {e}")
         return False
 
-# Preprocess frame
+# 预处理帧
 def preprocess_frame(original_image):
     height, width, _ = original_image.shape
     length = max(height, width)
@@ -201,7 +201,7 @@ def preprocess_frame(original_image):
     blob = cv2.dnn.blobFromImage(image, scalefactor=1/255, size=(640, 640), swapRB=True)
     return blob, scale
 
-# Draw bounding box
+# 绘制边界框
 def draw_bounding_box(img, class_id, confidence, x, y, x_plus_w, y_plus_h, depth=0):
     label = f'{CLASSES[class_id]} ({confidence:.2f})'
     color = colors[class_id]
@@ -210,15 +210,15 @@ def draw_bounding_box(img, class_id, confidence, x, y, x_plus_w, y_plus_h, depth
     if depth > 0:
         cv2.putText(img, f"Z: {depth:.1f}mm", (x, y_plus_h + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
 
-# Run inference
+# 运行推理
 def run_inference(blob):
     begin_time = time()
     outputs = model.infer(feeds=[blob], mode="static")
     end_time = time()
-    print(f"Model inference time: {end_time - begin_time}")
+    print("模型推理时间:", end_time - begin_time)
     return outputs
 
-# Calculate average depth in box
+# 计算框内深度均值
 def compute_box_depth(depth_image, box):
     x1, y1, w, h = [int(v) for v in box]
     x2, y2 = x1 + w, y1 + h
@@ -232,9 +232,9 @@ def compute_box_depth(depth_image, box):
         return np.mean(valid_depth) if len(valid_depth) > 0 else 0
     return 0
 
-# Postprocess function
+# 后处理函数
 def postprocess(original_image, outputs, scale, depth_image=None):
-    global last_boxes, global_item_counts, all_frame_counts 
+    global last_boxes, global_item_counts,all_frame_counts 
     if not detecting:
         return original_image
 
@@ -304,25 +304,26 @@ def postprocess(original_image, outputs, scale, depth_image=None):
         all_frame_counts[cls].append(current_counts[cls])
 
     count_text = ", ".join(f"{cls}: {cnt}" for cls, cnt in current_counts.items() if cnt > 0)
-    count_label.config(text=f"Current frame counts: {count_text if count_text else 'No items'}")
+    count_label.config(text=f"当前帧统计: {count_text if count_text else '无物品'}")
 
-    # Display the most frequent count for each class in the current frame (optional real-time display)
+    # 展示每个类别的“当前帧检测的数目出现频率最高”的统计（可选实时展示）
     cumulative_text.delete(1.0, tk.END)
-    cumulative_text.insert(tk.END, "Most frequent counts:\n")
+    cumulative_text.insert(tk.END, "频率最高的数目:\n")
     for cls in CLASSES:
         if len(all_frame_counts[cls]) > 0:
+            from collections import Counter
             most_common_count = Counter(all_frame_counts[cls]).most_common(1)[0][0]
             if most_common_count > 0:
                 cumulative_text.insert(tk.END, f"{cls}: {most_common_count}\n")
     if all(not any(all_frame_counts[cls]) for cls in CLASSES):
-        cumulative_text.insert(tk.END, "No items")
+        cumulative_text.insert(tk.END, "无物品")
 
     if any(new_counts[cls] > 0 for cls in CLASSES):
         save_to_csv(new_counts)
 
     return original_image
 
-# Update video frame
+# 更新视频帧
 def update_frame():
     global running, photo, start_time
     if not running:
@@ -337,27 +338,27 @@ def update_frame():
     try:
         frames = pipeline.wait_for_frames(100)
         if frames is None:
-            status_label.config(text="Unable to read frame")
+            status_label.config(text="无法读取帧")
             root.after(100, update_frame)
             return
         color_frame = frames.get_color_frame()
         if color_frame is None:
-            status_label.config(text="Unable to get color frame")
+            status_label.config(text="无法获取彩色帧")
             root.after(100, update_frame)
             return
         depth_frame = frames.get_depth_frame()
         if depth_frame is None:
-            status_label.config(text="Unable to get depth frame")
+            status_label.config(text="无法获取彩色帧")
             root.after(100, update_frame)
             return
 
-        # Convert color frame to BGR
+        # 彩色帧转 BGR
         frame_data = color_frame.get_data()
         frame = np.asanyarray(frame_data).reshape(
             (color_frame.get_height(), color_frame.get_width(), 3))
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-        # Perform inference only in detection mode
+        # 仅在检测模式下执行推理
         if detecting:
             depth_data = np.frombuffer(depth_frame.get_data(), dtype=np.uint16)
             depth_image = depth_data.reshape((depth_frame.get_height(), depth_frame.get_width()))
@@ -368,8 +369,8 @@ def update_frame():
             outputs = run_inference(blob)
             frame = postprocess(frame, outputs, scale_factor, depth_image=depth_image)
         else:
-            status_label.config(text="Camera feed active, click Start to begin detection...")
-        frame = cv2.resize(frame, (640, 480))  # Resize to reasonable size
+            status_label.config(text="摄像头显示中，点击开始进行检测...")
+        frame = cv2.resize(frame, (640, 480))  # 调整为合理大小
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         image = Image.fromarray(frame_rgb)
         photo = ImageTk.PhotoImage(image)
@@ -377,11 +378,11 @@ def update_frame():
         canvas.image = photo
 
     except Exception as e:
-        status_label.config(text=f"Processing error: {e}")
+        status_label.config(text=f"处理错误: {e}")
 
     root.after(100, update_frame)
 
-# Force exit program
+# 强制退出程序
 def exit_program():
     global running, pipeline, tcp_socket
     running = False
@@ -394,20 +395,20 @@ def exit_program():
     root.destroy()
     sys.exit()
 
-# Create GUI interface
+# 创建GUI界面
 def create_gui():
     global root, canvas, status_label, count_label, cumulative_text, photo, running
     root = tk.Tk()
-    root.title("3d-detection")  # Fixed typo in title
+    root.title("3d-detecion")
     root.geometry("900x600")
 
     top_frame = tk.Frame(root)
     top_frame.pack(pady=5)
 
-    status_label = tk.Label(top_frame, text="Initializing...", font=("Arial", 12))
+    status_label = tk.Label(top_frame, text="初始化中...", font=("Arial", 12))
     status_label.pack()
 
-    count_label = tk.Label(top_frame, text="Detect: none", font=("Arial", 12))
+    count_label = tk.Label(top_frame, text="detect: none", font=("Arial", 12))
     count_label.pack(pady=5)
 
     main_frame = tk.Frame(root)
@@ -418,13 +419,13 @@ def create_gui():
 
     cumulative_text = tk.Text(main_frame, width=20, height=30, font=("Arial", 12))
     cumulative_text.pack(side=tk.LEFT, padx=10)
-    cumulative_text.insert(tk.END, "Detect:\nnone")
+    cumulative_text.insert(tk.END, "detect:\nnone")
 
     button_frame = tk.Frame(root)
     button_frame.pack(pady=10)
 
-    tk.Button(button_frame, text="Start", command=connect_to_server, font=("Arial", 10)).pack(side=tk.LEFT, padx=5)
-    tk.Button(button_frame, text="Exit", command=exit_program, font=("Arial", 10)).pack(side=tk.LEFT, padx=5)
+    tk.Button(button_frame, text="开始", command=connect_to_server, font=("Arial", 10)).pack(side=tk.LEFT, padx=5)
+    tk.Button(button_frame, text="exit", command=exit_program, font=("Arial", 10)).pack(side=tk.LEFT, padx=5)
 
     root.protocol("WM_DELETE_WINDOW", exit_program)
 
@@ -433,7 +434,7 @@ def create_gui():
         running = True
         update_frame()
     else:
-        status_label.config(text="Initialization failed")
+        status_label.config(text="初始化失败")
 
     root.mainloop()
 
