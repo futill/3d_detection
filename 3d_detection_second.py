@@ -1,10 +1,19 @@
+#摄像头参数252行
+#模型路径241行
+#ip修改58行
+#模型分辨率66行
+#置信度356行
+#队伍名称49行
+#每轮识别时间47行
+
+
 import os
 import cv2
 import numpy as np
 from time import time, sleep
 from datetime import datetime
 from ais_bench.infer.interface import InferSession
-from pyorbbecsdk import Config, OBSensorType, OBFormat, Pipeline
+from pyorbbecsdk import *
 import tkinter as tk
 from PIL import Image, ImageTk
 import sys
@@ -16,19 +25,12 @@ from collections import Counter
 import threading
 import logging
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Class definitions
-CLASSES = [
-    'CA001', 'CA002', 'CA003', 'CA004', 'CB001', 'CB002', 'CB003', 'CB004',
-    'CC001', 'CC002', 'CC003', 'CC004', 'CD001', 'CD002', 'CD003', 'CD004',
-    'W001', 'W002', 'W003', 'W004'
-]
+CLASSES = ['CA001', 'CA002','CB001', 'CB002', 'CC001', 'CC002', 'CD001', 'CD002','W001', 'W002']
 colors = np.random.uniform(0, 255, size=(len(CLASSES), 3))
 
 all_frame_counts = {cls: [] for cls in CLASSES}
-# Global variables
 model = None
 pipeline = None
 running = False
@@ -53,7 +55,6 @@ max_detection_rounds = 3
 round_results = []
 final_results = {}
 
-# TCP configuration
 TCP_HOST = '192.168.137.100'
 TCP_PORT = 6666
 
@@ -62,13 +63,14 @@ DESKTOP_PATH = os.path.expanduser(f"/home/{getpass.getuser()}/Desktop")
 RESULT_DIR = os.path.join(DESKTOP_PATH, "result_r")
 RESULT_FILE = os.path.join(RESULT_DIR, f"{TEAM_ID}-R{ROUND}.txt")
 
+imgz = 1280 #根据模型分辨率修改
+
 # Initialize CSV file
 def init_csv():
     with open('item_counts.csv', 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(['Timestamp', 'Class', 'Count'])
 
-# End detection round
 def end_detection_round():
     global detection_round, round_results, final_results, detecting
     detecting = False
@@ -76,7 +78,6 @@ def end_detection_round():
     logging.info(f"Ended detection round {detection_round}")
     status_label.config(text=f"Detection round {detection_round} completed")
 
-    # Calculate the most frequent detection result for the current round
     current_counts = {}
     for cls in CLASSES:
         if len(all_frame_counts[cls]) > 0:
@@ -101,7 +102,6 @@ def end_detection_round():
         if count > 0:
             cumulative_text.insert(tk.END, f"{cls}: {count}\n")
 
-    # Send next_target signal
     next_target()
 
     if detection_round < max_detection_rounds:
@@ -113,18 +113,15 @@ def end_detection_round():
         detecting = False
         status_label.config(text="Detection completed, results sent.")
 
-# Delay before starting next round
 def start_next_round():
     sleep(3)
     start_detection_round()
 
-# Reset frame counts
 def reset_all_frame_counts():
     global all_frame_counts
     all_frame_counts = {cls: [] for cls in CLASSES}
     logging.info("Frame counts reset")
 
-# Start a new detection round
 def start_detection_round():
     global detecting, start_time, detection_round
     reset_all_frame_counts()
@@ -133,7 +130,6 @@ def start_detection_round():
     logging.info(f"Starting detection round {detection_round + 1}")
     status_label.config(text=f"Starting detection round {detection_round + 1}...")
 
-# Save final results
 def save_final_results(results):
     if not os.path.exists(RESULT_DIR):
         os.makedirs(RESULT_DIR)
@@ -146,7 +142,6 @@ def save_final_results(results):
     logging.info(f"Final results saved to {RESULT_FILE}")
     status_label.config(text=f"Final results saved to {RESULT_FILE}")
 
-# Save counts to CSV
 def save_to_csv(new_counts):
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     with open('item_counts.csv', 'a', newline='') as f:
@@ -155,7 +150,6 @@ def save_to_csv(new_counts):
             if count > 0:
                 writer.writerow([timestamp, cls, count])
 
-# Send TCP data
 def send_tcp_data(data_type, data):
     global tcp_socket
     if tcp_socket is None:
@@ -175,17 +169,14 @@ def send_tcp_data(data_type, data):
         logging.error(f"TCP send failed: {e}")
         return False
 
-# Send team ID
 def send_team_id():
     return send_tcp_data(0, TEAM_ID)
 
-# Send next target signal
 def next_target():
     success = send_tcp_data(3, TEAM_ID)
     logging.info(f"Sent next_target signal: {'Success' if success else 'Failed'}")
     return success
 
-# Send result file
 def send_result_file():
     global tcp_socket
     try:
@@ -204,7 +195,6 @@ def send_result_file():
         status_label.config(text=f"Failed to send result file: {e}")
         logging.error(f"Failed to send result file: {e}")
 
-# Connect to referee server
 def connect_to_server():
     global tcp_socket, detecting, start_time, detection_round
     try:
@@ -233,7 +223,6 @@ def connect_to_server():
             tcp_socket.close()
             tcp_socket = None
 
-# Calculate IoU
 def compute_iou(box1, box2):
     x1_1, y1_1, w1, h1 = box1
     x1_2, y1_2, w2, h2 = box2
@@ -249,47 +238,55 @@ def compute_iou(box1, box2):
     union_area = box1_area + box2_area - inter_area
     return inter_area / union_area if union_area > 0 else 0
 
-# Initialize model and camera
 def initialize():
     global model, pipeline
     try:
-        model = InferSession(device_id=0, model_path="/home/HwHiAiUser/3d_detection/yolov8x_24_0307_5381_1280_huawei.om")
+        model = InferSession(device_id=0, model_path="/home/HwHiAiUser/3d_detection/1280x1280.om")
         status_label.config(text="Model loaded successfully")
-        logging.info("Model loaded successfully")
     except Exception as e:
         status_label.config(text=f"Model loading failed: {e}")
-        logging.error(f"Model loading failed: {e}")
         return False
 
     config = Config()
     pipeline = Pipeline()
+    device = pipeline.get_device()
+    #device.set_bool_property(OBPropertyID.OB_PROP_COLOR_AUTO_WHITE_BALANCE_BOOL, True)#自动白平
+    #device.set_bool_property(OBPropertyID.OB_PROP_COLOR_GAIN_INT, True)#对比度
+    #device.set_bool_property(OBPropertyID.OB_PROP_COLOR_EXPOSURE_INT, True)#曝光
+    #device.set_bool_property(OBPropertyID.OB_PROP_DEPTH_AUTO_EXPOSURE_BOOL, True)#颜色矫正
     try:
         color_profile_list = pipeline.get_stream_profile_list(OBSensorType.COLOR_SENSOR)
-        color_profile = color_profile_list.get_video_stream_profile(1920, 1080, OBFormat.RGB, 10)
+        color_profile = color_profile_list.get_video_stream_profile(1280, 720, OBFormat.RGB, 10)
         config.enable_stream(color_profile)
         depth_profile_list = pipeline.get_stream_profile_list(OBSensorType.DEPTH_SENSOR)
-        depth_profile = depth_profile_list.get_video_stream_profile(640, 480, OBFormat.Y16, 10)
+        depth_profile = depth_profile_list.get_video_stream_profile(1280, 1024, OBFormat.Y16, 10)
         config.enable_stream(depth_profile)
-        pipeline.start(config)
         status_label.config(text="Camera initialized successfully")
         logging.info("Camera initialized successfully")
+    except Exception as e:
+        print(e)
+        return
+    config.set_align_mode(OBAlignMode.HW_MODE)
+    try:
+        pipeline.enable_frame_sync()
+    except Exception as e:
+        print(e)
+    try:
+        pipeline.start(config)
         return True
     except Exception as e:
-        status_label.config(text=f"Camera configuration failed: {e}")
-        logging.error(f"Camera configuration failed: {e}")
-        return False
+        print(e)
+        return
 
-# Preprocess frame
 def preprocess_frame(original_image):
     height, width, _ = original_image.shape
     length = max(height, width)
     image = np.zeros((length, length, 3), np.uint8)
     image[0:height, 0:width] = original_image
-    scale = length / 640
-    blob = cv2.dnn.blobFromImage(image, scalefactor=1/255, size=(640, 640), swapRB=True)
+    scale = length / imgz
+    blob = cv2.dnn.blobFromImage(image, scalefactor=1/255, size=(imgz, imgz), swapRB=True)
     return blob, scale
 
-# Draw bounding box
 def draw_bounding_box(img, class_id, confidence, x, y, x_plus_w, y_plus_h, depth=0):
     label = f'{CLASSES[class_id]} ({confidence:.2f})'
     color = colors[class_id]
@@ -298,31 +295,48 @@ def draw_bounding_box(img, class_id, confidence, x, y, x_plus_w, y_plus_h, depth
     if depth > 0:
         cv2.putText(img, f"Z: {depth:.1f}mm", (x, y_plus_h + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 2)
 
-# Run inference
 def run_inference(blob):
     begin_time = time()
     outputs = model.infer(feeds=[blob], mode="static")
     end_time = time()
-    logging.info(f"Model inference time: {end_time - begin_time:.3f} seconds")
+    #logging.info(f"Model inference time: {end_time - begin_time:.3f} seconds")
     return outputs
 
-# Calculate average depth in box
-def compute_box_depth(depth_image, box):
+def compute_box_depth(depth_data, box):
     x1, y1, w, h = [int(v) for v in box]
-    x2, y2 = x1 + w, y1 + h
-    x1 = max(0, x1)
-    y1 = max(0, y1)
-    x2 = min(depth_image.shape[1], x2)
-    y2 = min(depth_image.shape[0], y2)
-    if x2 > x1 and y2 > y1:
-        box_depth = depth_image[y1:y2, x1:x2]
-        valid_depth = box_depth[box_depth > 0]
-        return np.mean(valid_depth) if len(valid_depth) > 0 else 0
-    return 0
+    center_x = x1 + w // 2
+    center_y = y1 + h // 2
+    region_size = 5
+    half_region = region_size // 2
+    depth_values = []
+    for dy in range(-half_region, half_region + 1):
+        for dx in range(-half_region, half_region + 1):
+            px = center_x + dx
+            py = center_y + dy
+            # 边界检查
+            if 0 <= px < depth_data.shape[1] and 0 <= py < depth_data.shape[0]:
+                depth = depth_data[py, px]
+                if depth > 0 and np.isfinite(depth):
+                    depth_values.append(depth)
+    if depth_values:
+        avg_depth = float(np.mean(depth_values))
+        return avg_depth
+    else:
+        return 0
+
+def pixel_to_camera_coordinates(u, v, depth):
+    fx = 475.312
+    fy = 475.312
+    cx = 327.94
+    cy = 240.372
+    X = (u - cx) * depth / fx
+    Y = (v - cy) * depth / fy
+    Z = depth
+    return X, Y, Z
 
 # Postprocess function
-def postprocess(original_image, outputs, scale, depth_image=None):
-    global last_boxes, global_item_counts, all_frame_counts
+def postprocess(original_image, outputs, scale, depth_image):
+    global last_boxes, global_item_counts, all_frame_counts, table_depth
     if not detecting:
         return original_image
 
@@ -335,11 +349,11 @@ def postprocess(original_image, outputs, scale, depth_image=None):
     depths = []
     current_counts = {cls: 0 for cls in CLASSES}
     new_counts = {cls: 0 for cls in CLASSES}
-
+    valid_depths = []
     for i in range(rows):
         classes_scores = outputs[0][i][4:]
         _, maxScore, _, (x, maxClassIndex) = cv2.minMaxLoc(classes_scores)
-        if maxScore >= 0.4:
+        if maxScore >= 0.5:
             box = [
                 outputs[0][i][0] - (0.5 * outputs[0][i][2]),
                 outputs[0][i][1] - (0.5 * outputs[0][i][3]),
@@ -350,24 +364,45 @@ def postprocess(original_image, outputs, scale, depth_image=None):
             y1 = round(box[1] * scale)
             w = round(box[2] * scale)
             h = round(box[3] * scale)
+            object_center_x = x1 + w // 2
+            object_center_y = y1 + h // 2
             depth = compute_box_depth(depth_image, [x1, y1, w, h]) if depth_image is not None else 0
+            X,Y,Z=pixel_to_camera_coordinates(object_center_x, object_center_y, depth)
+            if depth > 0 and np.isfinite(depth):  # Only include valid depths
+                valid_depths.append(Y)
             boxes.append([x1, y1, w, h])
             scores.append(maxScore)
             class_ids.append(maxClassIndex)
-            depths.append(depth)
+            depths.append(Y)
+
+    if valid_depths:
+        table_depth = float(np.mean(valid_depths))  
+    else:
+        table_depth = None  
 
     indices = cv2.dnn.NMSBoxes(boxes, scores, 0.4, 0.6)
-
+    depth_threshold = 300
     current_boxes = []
     iou_threshold = 0.5
-    depth_threshold = 300
     for i in indices:
         box = boxes[i]
         score = scores[i]
         class_id = class_ids[i]
         depth = depths[i]
+        x1 = round(box[0] * scale)
+        y1 = round(box[1] * scale)
+        w = round(box[2] * scale)
+        h = round(box[3] * scale)
+        object_center_x = x1 + w // 2
+        object_center_y = y1 + h // 2
+        object_depth = compute_box_depth(depth_image, [x1, y1, w, h]) if depth_image is not None else 0
+        X,Y,Z=pixel_to_camera_coordinates(object_center_x, object_center_y, object_depth)
+        if int(Y)>int(table_depth+100):
+            print(f"Object at ({x1}, {y1}) filtered out: depth {Y:.1f} mm, table_depth {table_depth:.1f} mm")
+            continue
+        if Y <=0:
+            continue
         is_new = True
-
         for frame_boxes in last_boxes:
             for last_box, last_class_id, last_depth, last_score, counted in frame_boxes:
                 iou = compute_iou(box, last_box)
@@ -375,14 +410,13 @@ def postprocess(original_image, outputs, scale, depth_image=None):
                 if iou >= iou_threshold and depth_diff <= depth_threshold and not counted:
                     is_new = False
                     break
-
         if is_new:
             new_counts[CLASSES[class_id]] += 1
             global_item_counts[CLASSES[class_id]] += 1
 
         current_counts[CLASSES[class_id]] += 1
         current_boxes.append((box, class_id, depth, score, is_new))
-        draw_bounding_box(original_image, class_id, score, box[0], box[1], box[0] + box[2], box[1] + box[3], depth)
+        draw_bounding_box(original_image, class_id, score, box[0], box[1], box[0] + box[2], box[1] + box[3],Y)
 
     last_boxes.append(current_boxes)
     if len(last_boxes) > MAX_FRAMES_MEMORY:
@@ -409,7 +443,6 @@ def postprocess(original_image, outputs, scale, depth_image=None):
 
     return original_image
 
-# Update video frame
 def update_frame():
     global running, photo, start_time, detecting
     if not running:
@@ -432,24 +465,19 @@ def update_frame():
         root.after(100, update_frame)
         return
     depth_frame = frames.get_depth_frame()
-    
-    # Convert color frame to BGR
     frame_data = color_frame.get_data()
     frame = np.asanyarray(frame_data).reshape(
         (color_frame.get_height(), color_frame.get_width(), 3))
     frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
 
-    # Perform inference only in detection mode
+    depth_data = np.frombuffer(depth_frame.get_data(), dtype=np.uint16)
+    depth_data = depth_data.reshape((depth_frame.get_height(), depth_frame.get_width()))
+    scale_depth = depth_frame.get_depth_scale()
+    depth_data = depth_data.astype(np.float32) * scale_depth
     if detecting:
-        depth_data = np.frombuffer(depth_frame.get_data(), dtype=np.uint16)
-        expected_size = depth_frame.get_height() * depth_frame.get_width()
-        depth_image = depth_data.reshape((depth_frame.get_height(), depth_frame.get_width()))
-        scale = depth_frame.get_depth_scale()
-        depth_image = depth_image.astype(np.float32) * scale * 1000
-        depth_image = np.where((depth_image > 20) & (depth_image < 10000), depth_image, 0).astype(np.uint16)
         blob, scale_factor = preprocess_frame(frame)
         outputs = run_inference(blob)
-        frame = postprocess(frame, outputs, scale_factor, depth_image=depth_image)
+        frame = postprocess(frame, outputs, scale_factor, depth_data)
     else:
         status_label.config(text="Camera feed active, click Start to begin detection...")
     
@@ -461,7 +489,6 @@ def update_frame():
     canvas.image = photo
     root.after(100, update_frame)
 
-# Force exit program
 def exit_program():
     global running, pipeline, tcp_socket
     running = False
@@ -474,7 +501,6 @@ def exit_program():
     root.destroy()
     sys.exit()
 
-# Create GUI interface
 def create_gui():
     global root, canvas, status_label, count_label, cumulative_text, photo, running
     root = tk.Tk()
